@@ -4,6 +4,7 @@ from starlette.status import HTTP_404_NOT_FOUND
 from fastapi.responses import RedirectResponse
 
 from dto.urls import URLBaseDTO, URLLongDTO
+from tools.tools import RedisTools
 from services.logs import logger
 from services.urls import (
     update_url_service,
@@ -13,6 +14,7 @@ from services.urls import (
 )
 from services.utils import generate_short_url
 from services.responce import ResponseModel, generate_json_response
+from exceptions.api_error import BadRequestHttpError
 
 urls_router = APIRouter()
 
@@ -25,15 +27,18 @@ urls_router = APIRouter()
 async def get_short_url(
     data: URLLongDTO,
 ):
-    short_hash = generate_short_url(data.long_url)
-    url_dto = URLBaseDTO(
-        long_url=data.long_url, short_url=short_hash[:5], redirect_count=0
-    )
-    long_url = jsonable_encoder(url_dto)
-    print("lluu--->>>", long_url)
-    new_url = await get_short_url_service(long_url)
-    print("---->>>", new_url)
-    return new_url["short_url"]
+    try:
+        short_hash = generate_short_url(data.long_url)
+        url_dto = URLBaseDTO(
+            long_url=data.long_url, short_url=short_hash[:5], redirect_count=0
+        )
+        long_url = jsonable_encoder(url_dto)
+        new_url = await get_short_url_service(long_url)
+        RedisTools.set_pair(new_url["short_url", new_url["long_url"]])
+        return new_url["short_url"]
+    except Exception as e:
+        logger.error(e)
+        raise BadRequestHttpError(f"Error, {e}")
 
 
 @logger.catch()
@@ -47,9 +52,12 @@ async def get_urls() -> dict:
 
 @logger.catch()
 @urls_router.get("/long_url/{short_url}", summary="Get long URL")
-async def get_long_url(short_url: str):
-    base_url = await get_url_from_short_service(short_url)
-    return base_url["long_url"]
+async def get_long_url(short_url: str) -> str:
+    if short_url not in [s.encode("utf-8") for s in RedisTools.get_keys()]:
+        base_url = await get_url_from_short_service(short_url)
+        return base_url["long_url"]
+    url = RedisTools.get_pair(short_url)
+    return url
 
 
 @logger.catch()

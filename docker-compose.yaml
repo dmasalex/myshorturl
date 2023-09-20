@@ -1,0 +1,55 @@
+version: '3.9'
+
+services:
+  mongodb:
+    image: mongo:latest
+    restart: always
+    ports:
+      - '27037:27017'
+    networks:
+      - innerNetwork
+    volumes:
+      - mongodb_data:/data/db
+
+
+  backend:
+    build: .
+    container_name: myshortuls
+    ports:
+      - "8000:8000"
+    restart: always
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    command: "gunicorn main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000"
+    networks:
+      - innerNetwork
+
+    environment:
+      - API_REDIS_HOST=redis
+
+  redis:
+    container_name: redis
+    image: redis:7.0.5
+    build:
+      context: .
+      dockerfile: redis/Dockerfile
+    restart: always
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - mongodb
+    volumes:
+      - ./cache:/data
+    networks:
+      - innerNetwork
+    ports:
+      - "6379:6379"
+
+networks:
+  innerNetwork:
+    driver: bridge
+
+volumes:
+  mongodb_data:
