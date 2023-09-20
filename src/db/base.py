@@ -1,23 +1,9 @@
-import sqlalchemy
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+import motor.motor_asyncio
 
-from settings.db_settings import settings
+URLS_DETAILS = "mongodb://localhost:27037"
 
-DATABASE_URL = (
-    f"postgresql+asyncpg://{settings.DB_USER}:"
-    f"{settings.DB_PASS}@{settings.DB_HOST}:"
-    f"{settings.DB_PORT}/{settings.DB_NAME}"
-)
+url_client = motor.motor_asyncio.AsyncIOMotorClient(URLS_DETAILS)
 
-metadata = sqlalchemy.MetaData()
+urls_database = url_client.urls
 
-engine = create_async_engine(DATABASE_URL, echo=True)
-async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-Base = declarative_base(metadata=metadata)
-
-
-# Dependency
-async def get_session() -> AsyncSession:
-    async with async_session() as session:
-        yield session
+urls_collection = urls_database.get_collection("urls_collection")
